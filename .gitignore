@@ -1,0 +1,40 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env
+
+# Data
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/cache/*
+data/exports/*
+!data/cache/.gitkeep
+!data/exports/.gitkeep
+!data/templates/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Agent Zero project config
+.a0proj/

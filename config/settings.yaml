@@ -1,0 +1,143 @@
+# =============================================================================
+# Full SEO Automation - Global Configuration
+# =============================================================================
+
+app:
+  name: "Full SEO Automation"
+  version: "1.0.0"
+  log_level: "INFO"
+  data_dir: "data"
+  cache_dir: "data/cache"
+  export_dir: "data/exports"
+
+database:
+  url: "sqlite:///data/seo_automation.db"
+  echo: false
+  pool_size: 5
+  wal_mode: true
+
+llm:
+  primary:
+    provider: "openai"
+    model: "gpt-4o-mini"
+    max_tokens: 4096
+    temperature: 0.7
+    timeout: 60
+  fallback:
+    provider: "gemini"
+    model: "gemini-2.0-flash"
+    max_tokens: 4096
+    temperature: 0.7
+    timeout: 60
+  embeddings:
+    provider: "openai"
+    model: "text-embedding-3-small"
+    dimensions: 1536
+  cache:
+    enabled: true
+    ttl_hours: 24
+    max_size: 10000
+  budget:
+    max_monthly_usd: 100.0
+    warning_threshold_pct: 80
+    cost_per_1k_input_tokens: 0.00015
+    cost_per_1k_output_tokens: 0.0006
+
+rate_limits:
+  openai:
+    requests_per_minute: 60
+    tokens_per_minute: 200000
+  gemini:
+    requests_per_minute: 15
+    tokens_per_minute: 100000
+  google_apis:
+    requests_per_minute: 30
+  serp_scraper:
+    requests_per_minute: 5
+    delay_between_requests: 3.0
+  pagespeed:
+    requests_per_minute: 10
+
+scheduler:
+  timezone: "UTC"
+  job_store: "sqlite:///data/scheduler_jobs.db"
+  max_concurrent_jobs: 3
+  default_jobs:
+    rank_tracking:
+      enabled: true
+      cron: "0 6 * * *"
+    site_audit:
+      enabled: true
+      cron: "0 2 * * 0"
+    content_refresh_check:
+      enabled: true
+      cron: "0 3 1 * *"
+    serp_monitoring:
+      enabled: true
+      cron: "0 */6 * * *"
+    analytics_sync:
+      enabled: true
+      cron: "0 1 * * *"
+
+content:
+  defaults:
+    target_word_count: 1500
+    min_word_count: 800
+    max_word_count: 5000
+    readability_target: 60
+    keyword_density_min: 0.5
+    keyword_density_max: 2.5
+    heading_ratio: 150
+    paragraph_max_words: 150
+  types:
+    - "blog_post"
+    - "pillar_page"
+    - "listicle"
+    - "how_to_guide"
+    - "comparison"
+    - "case_study"
+    - "product_review"
+  seo:
+    title_min_length: 30
+    title_max_length: 60
+    meta_description_min: 120
+    meta_description_max: 160
+    slug_max_length: 75
+
+research:
+  topical_map:
+    max_pillars: 10
+    max_clusters_per_pillar: 15
+    max_pages_per_cluster: 20
+  keywords:
+    min_volume: 10
+    max_difficulty: 80
+    opportunity_weights:
+      volume: 0.3
+      difficulty_inverse: 0.3
+      cpc: 0.2
+      trend: 0.2
+
+scraper:
+  user_agents:
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
+  headless: true
+  timeout: 30
+  max_retries: 3
+  retry_delay: 5.0
+
+audit:
+  categories:
+    - "technical"
+    - "on_page"
+    - "performance"
+    - "security"
+    - "mobile"
+    - "accessibility"
+  scoring:
+    critical_weight: 10
+    warning_weight: 5
+    info_weight: 1
