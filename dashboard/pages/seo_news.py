@@ -40,7 +40,7 @@ def render_seo_news_page():
 
     # ---- Tabs ----
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        ["🔍 Scrape News", "📊 Strategies", "✅ Verified", "🚀 Upgrades", "📜 History"]
+        "🔍 Scrape News", "📊 Strategies", "✅ Verified", "🚀 Upgrades", "📜 History"
     ])
 
     # =========================
