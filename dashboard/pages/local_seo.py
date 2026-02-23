@@ -574,7 +574,7 @@ def _render_recommendations_tab(results: Dict) -> None:
 def _render_report_downloads(results: Dict) -> None:
     """Render HTML and JSON report download buttons."""
     st.divider()
-    st.subheader("\U0001f4e5 Download Reports")
+    st.subheader("📥 Download Reports")
 
     try:
         generator = LocalSEOReportGenerator()
@@ -584,14 +584,30 @@ def _render_report_downloads(results: Dict) -> None:
     domain = _safe_get(results, "business_info", "domain", default="local_seo")
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    # Build audit_data dict matching what report generator expects
+    audit_data = {
+        "business_name": _safe_get(results, "business_info", "name", default="Business"),
+        "domain": domain,
+        "location": _safe_get(results, "business_info", "location", default=""),
+        "audit_date": datetime.now().strftime("%Y-%m-%d"),
+        "scores": results.get("scores", {}),
+        "top_issues": results.get("issues", []),
+        "onpage": results.get("on_page_results", {}),
+        "gbp": results.get("gbp_results", {}),
+        "citations": results.get("citation_results", {}),
+        "reviews": results.get("review_results", {}),
+        "competitors": results.get("competitor_results", {}),
+        "recommendations": results.get("recommendations", []),
+    }
+
     c1, c2 = st.columns(2)
 
     with c1:
         if generator:
             try:
-                html_report = generator.generate_html_report(results)
+                html_report = generator.generate_html_report(audit_data)
                 st.download_button(
-                    label="\U0001f4c4 Download HTML Report",
+                    label="📄 Download HTML Report",
                     data=html_report,
                     file_name=f"local_seo_report_{domain}_{ts}.html",
                     mime="text/html",
@@ -605,10 +621,12 @@ def _render_report_downloads(results: Dict) -> None:
     with c2:
         if generator:
             try:
-                json_report = generator.generate_json_report(results)
+                json_report = generator.generate_json_report(audit_data)
+                import json as _json
+                json_str = _json.dumps(json_report, indent=2, default=str)
                 st.download_button(
-                    label="\U0001f4ca Download JSON Report",
-                    data=json_report,
+                    label="📊 Download JSON Report",
+                    data=json_str,
                     file_name=f"local_seo_report_{domain}_{ts}.json",
                     mime="application/json",
                     use_container_width=True,
@@ -617,6 +635,7 @@ def _render_report_downloads(results: Dict) -> None:
                 st.error(f"Failed to generate JSON report: {e}")
         else:
             st.warning("Report generator unavailable.")
+
 
 
 # ---------------------------------------------------------------------------
@@ -643,9 +662,9 @@ def _render_audit_history() -> None:
                 audit_map: Dict[str, int] = {}
                 for audit in audits:
                     profile = None
-                    if audit.business_profile_id:
+                    if audit.business_id:
                         profile = session.query(LocalBusinessProfile).get(
-                            audit.business_profile_id
+                            audit.business_id
                         )
                     domain_val = profile.domain if profile else "N/A"
                     name = profile.business_name if profile else "N/A"
