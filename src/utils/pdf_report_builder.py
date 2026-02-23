@@ -3,7 +3,7 @@
 
 Builder-pattern class that constructs professional, narrative-style
 HTML reports with embedded matplotlib charts and converts them to PDF
-via WeasyPrint.
+via xhtml2pdf (pure Python) with WeasyPrint fallback.
 """
 from __future__ import annotations
 
@@ -987,14 +987,37 @@ class PDFReportBuilder:
 
     def build_pdf(self, filepath):
         """Build PDF and save to filepath. Returns the file path."""
-        from weasyprint import HTML as WeasyprintHTML
-
         html_content = self.build_html()
         dirpath = os.path.dirname(filepath)
         if dirpath:
             os.makedirs(dirpath, exist_ok=True)
-        WeasyprintHTML(string=html_content).write_pdf(filepath)
-        return filepath
+
+        # Try xhtml2pdf first (pure Python, works on all platforms)
+        try:
+            from xhtml2pdf import pisa
+            with open(filepath, 'wb') as pdf_file:
+                result = pisa.CreatePDF(html_content, dest=pdf_file)
+                if result.err:
+                    raise RuntimeError('xhtml2pdf conversion had errors')
+            return filepath
+        except ImportError:
+            pass
+
+        # Fallback to WeasyPrint (requires GTK on Windows)
+        try:
+            from weasyprint import HTML as WeasyprintHTML
+            WeasyprintHTML(string=html_content).write_pdf(filepath)
+            return filepath
+        except (ImportError, OSError) as e:
+            # Last resort: save as HTML
+            html_path = filepath.replace('.pdf', '.html')
+            with open(html_path, 'w', encoding='utf-8') as fh:
+                fh.write(html_content)
+            raise RuntimeError(
+                'PDF generation requires xhtml2pdf or weasyprint. '
+                'Install with: pip install xhtml2pdf. '
+                'HTML report saved to: {0}'.format(html_path)
+            ) from e
 
     def build_both(self, filepath_base):
         """Build both HTML and PDF. Returns (html_path, pdf_path)."""
@@ -1009,7 +1032,19 @@ class PDFReportBuilder:
         with open(html_path, 'w', encoding='utf-8') as fh:
             fh.write(html_content)
 
-        from weasyprint import HTML as WeasyprintHTML
-        WeasyprintHTML(string=html_content).write_pdf(pdf_path)
+        # Try xhtml2pdf first (pure Python, works on all platforms)
+        try:
+            from xhtml2pdf import pisa
+            with open(pdf_path, 'wb') as pdf_file:
+                result = pisa.CreatePDF(html_content, dest=pdf_file)
+                if result.err:
+                    raise RuntimeError('xhtml2pdf conversion had errors')
+        except ImportError:
+            # Fallback to WeasyPrint
+            try:
+                from weasyprint import HTML as WeasyprintHTML
+                WeasyprintHTML(string=html_content).write_pdf(pdf_path)
+            except (ImportError, OSError):
+                pdf_path = html_path  # Return HTML path if PDF fails
 
         return (html_path, pdf_path)
