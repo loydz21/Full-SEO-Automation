@@ -634,40 +634,71 @@ def _tab_export():
 
     st.header("Export Audit Report")
 
-    fmt = st.selectbox("Format", ["JSON", "HTML"], key="ta_export_fmt")
+    st.markdown(
+        "Generate a professional PDF report with narrative analysis, "
+        "charts, score visualizations, and actionable recommendations."
+    )
+
+    fmt = st.selectbox("Format", ["PDF", "HTML", "JSON"], key="ta_export_fmt")
 
     domain_slug = result.get("domain", "site").replace(".", "_").replace("/", "")
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    ext = "json" if fmt == "JSON" else "html"
+    ext_map = {"PDF": "pdf", "HTML": "html", "JSON": "json"}
+    ext = ext_map.get(fmt, "pdf")
     default_name = "audit_{d}_{t}.{e}".format(d=domain_slug, t=ts, e=ext)
 
     filename = st.text_input("Filename", value=default_name, key="ta_export_name")
 
     if st.button("Export Report", type="primary", key="ta_export_btn"):
         try:
-            from src.modules.technical_audit.auditor import TechnicalAuditor
-            auditor = TechnicalAuditor()
             filepath = str(EXPORT_DIR / filename)
-            auditor.export_audit_report(
-                audit_data=result,
-                filepath=filepath,
-                fmt=ext,
-            )
-            st.success("Report exported to: " + filepath)
+            os.makedirs(str(EXPORT_DIR), exist_ok=True)
 
-            # Offer download
-            with open(filepath, "r", encoding="utf-8") as fh:
-                content = fh.read()
-            mime = "application/json" if ext == "json" else "text/html"
-            st.download_button(
-                label="Download " + filename,
-                data=content,
-                file_name=filename,
-                mime=mime,
-                key="ta_download_btn",
-            )
+            if fmt == "PDF":
+                from dashboard.export_helper import generate_technical_audit_pdf
+                filepath = generate_technical_audit_pdf(result, filepath)
+                st.success("PDF report generated: " + filepath)
+                with open(filepath, "rb") as fh:
+                    pdf_data = fh.read()
+                st.download_button(
+                    label="Download PDF Report",
+                    data=pdf_data,
+                    file_name=filename,
+                    mime="application/pdf",
+                    key="ta_download_btn",
+                )
+            elif fmt == "HTML":
+                from src.modules.technical_audit.auditor import TechnicalAuditor
+                auditor = TechnicalAuditor()
+                auditor.export_audit_report(audit_data=result, filepath=filepath, fmt="html")
+                st.success("HTML report exported: " + filepath)
+                with open(filepath, "r", encoding="utf-8") as fh:
+                    html_content = fh.read()
+                st.download_button(
+                    label="Download HTML Report",
+                    data=html_content,
+                    file_name=filename,
+                    mime="text/html",
+                    key="ta_download_btn",
+                )
+            else:
+                from src.modules.technical_audit.auditor import TechnicalAuditor
+                auditor = TechnicalAuditor()
+                auditor.export_audit_report(audit_data=result, filepath=filepath, fmt="json")
+                st.success("JSON report exported: " + filepath)
+                with open(filepath, "r", encoding="utf-8") as fh:
+                    json_content = fh.read()
+                st.download_button(
+                    label="Download JSON Report",
+                    data=json_content,
+                    file_name=filename,
+                    mime="application/json",
+                    key="ta_download_btn",
+                )
         except Exception as exc:
             st.error("Export failed: " + str(exc))
+            import traceback
+            st.code(traceback.format_exc())
 
 
 # ---------------------------------------------------------------------------

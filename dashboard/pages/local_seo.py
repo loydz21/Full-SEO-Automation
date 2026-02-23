@@ -816,6 +816,27 @@ def render_local_seo_page() -> None:
     if results:
         st.divider()
 
+    # --- PDF Report Download ---
+    with st.expander("📄 Download PDF Report", expanded=False):
+        st.markdown("Generate a professional narrative PDF report of your local SEO analysis.")
+        if st.button("Generate PDF Report", type="primary", key="ls_pdf_btn"):
+            try:
+                from dashboard.export_helper import generate_local_seo_pdf
+                local_data = {
+                    "domain": st.session_state.get("ls_domain", ""),
+                    "overall_score": st.session_state.get("ls_overall_score", 0),
+                    "gmb_analysis": st.session_state.get("ls_gmb_data", {}),
+                    "citations": st.session_state.get("ls_citations", {}),
+                    "reviews": st.session_state.get("ls_reviews", {}),
+                }
+                pdf_path = generate_local_seo_pdf(local_data)
+                with open(pdf_path, "rb") as fh:
+                    st.download_button("⬇️ Download PDF", fh.read(),
+                        file_name=pdf_path.split("/")[-1], mime="application/pdf", key="ls_pdf_dl")
+                st.success("PDF report generated!")
+            except Exception as exc:
+                st.error("PDF generation failed: " + str(exc))
+
         tabs = st.tabs([
             "\U0001f4ca Overview",
             "\U0001f310 On-Page Local SEO",

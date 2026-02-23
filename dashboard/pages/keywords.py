@@ -570,6 +570,26 @@ def _render_trends_tab(analyzer: KeywordAnalyzer) -> None:
 
 def _render_export_tab(analyzer: KeywordAnalyzer) -> None:
     """Render the Export tab with download buttons."""
+    # --- PDF Report Download ---
+    st.markdown("### 📥 Download PDF Report")
+    st.markdown("Generate a professional narrative PDF report with charts and analysis.")
+    if st.button("Generate PDF Report", type="primary", key="kw_pdf_btn"):
+        try:
+            from dashboard.export_helper import generate_keyword_research_pdf
+            kw_data = {
+                "domain": st.session_state.get("kw_domain", ""),
+                "keywords": st.session_state.get("kw_results", []),
+                "clusters": st.session_state.get("kw_clusters", []),
+                "quick_wins": st.session_state.get("kw_quick_wins", []),
+            }
+            pdf_path = generate_keyword_research_pdf(kw_data)
+            with open(pdf_path, "rb") as fh:
+                st.download_button("⬇️ Download PDF", fh.read(),
+                    file_name=pdf_path.split("/")[-1], mime="application/pdf", key="kw_pdf_dl")
+            st.success("PDF report generated!")
+        except Exception as exc:
+            st.error("PDF generation failed: " + str(exc))
+    st.divider()
     if "kw_research_data" not in st.session_state:
         st.info("Run a research pipeline first to export data.")
         return

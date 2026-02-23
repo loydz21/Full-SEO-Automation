@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import time
 from typing import Any, Optional
 
 import httpx
@@ -25,28 +26,91 @@ class PageSpeedInsights:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        requests_per_minute: int = 10,
-        timeout: int = 60,
+        requests_per_minute: Optional[int] = None,
+        timeout: int = 120,
+        max_retries: int = 3,
     ):
         self._api_key = api_key or os.getenv("PAGESPEED_API_KEY", "")
-        self._rpm = requests_per_minute
+        # Lower rate limit when no API key (Google is strict without one)
+        if requests_per_minute is not None:
+            self._rpm = requests_per_minute
+        else:
+            self._rpm = 10 if self._api_key else 3
         self._timeout = timeout
-        self._semaphore = asyncio.Semaphore(2)  # max concurrent requests
+        self._max_retries = max_retries
+        self._semaphore = asyncio.Semaphore(1 if not self._api_key else 2)
         self._request_timestamps: list[float] = []
+
+        if not self._api_key:
+            logger.warning(
+                "No PAGESPEED_API_KEY set. Using free tier with strict rate limits. "
+                "Get a free key at https://developers.google.com/speed/docs/insights/v5/get-started"
+            )
 
     async def _rate_limit(self) -> None:
         """Simple rate limiter."""
-        import time
         now = time.monotonic()
         self._request_timestamps = [
             t for t in self._request_timestamps if now - t < 60.0
         ]
         if len(self._request_timestamps) >= self._rpm:
-            wait = 60.0 - (now - self._request_timestamps[0])
+            wait = 60.0 - (now - self._request_timestamps[0]) + 1.0
             if wait > 0:
                 logger.debug("PageSpeed rate limit: sleeping %.1fs", wait)
                 await asyncio.sleep(wait)
         self._request_timestamps.append(time.monotonic())
+
+    async def _request_with_retry(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        params: dict,
+    ) -> dict:
+        """Make HTTP request with exponential backoff retry on 429 errors."""
+        for attempt in range(self._max_retries + 1):
+            try:
+                await self._rate_limit()
+                response = await client.get(url, params=params)
+
+                if response.status_code == 429:
+                    if attempt < self._max_retries:
+                        # Exponential backoff: 30s, 60s, 120s
+                        wait = 30 * (2 ** attempt)
+                        logger.warning(
+                            "PageSpeed 429 Too Many Requests. "
+                            "Retry %d/%d in %ds...",
+                            attempt + 1, self._max_retries, wait
+                        )
+                        await asyncio.sleep(wait)
+                        continue
+                    else:
+                        response.raise_for_status()
+
+                response.raise_for_status()
+                return response.json()
+
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429 and attempt < self._max_retries:
+                    wait = 30 * (2 ** attempt)
+                    logger.warning(
+                        "PageSpeed 429 rate limited. Retry %d/%d in %ds...",
+                        attempt + 1, self._max_retries, wait
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+            except httpx.TimeoutException:
+                if attempt < self._max_retries:
+                    wait = 10 * (2 ** attempt)
+                    logger.warning(
+                        "PageSpeed timeout. Retry %d/%d in %ds...",
+                        attempt + 1, self._max_retries, wait
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+
+        return {}
 
     async def analyze_url(
         self,
@@ -65,7 +129,6 @@ class PageSpeedInsights:
             Dict with scores, audits, and Core Web Vitals metrics.
         """
         categories = categories or ["performance", "seo", "accessibility", "best-practices"]
-        await self._rate_limit()
 
         params: dict[str, Any] = {
             "url": url,
@@ -73,22 +136,33 @@ class PageSpeedInsights:
         }
         if self._api_key:
             params["key"] = self._api_key
+        # Add categories as repeated params
         for cat in categories:
-            params.setdefault("category", [])
-            # httpx handles repeated params via list
-        # Build category params manually
-        category_params = "&".join(f"category={c}" for c in categories)
-        request_url = f"{PAGESPEED_API_URL}?{category_params}"
+            if "category" not in params:
+                params["category"] = []
+            if isinstance(params["category"], list):
+                params["category"].append(cat)
 
         async with self._semaphore:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 try:
-                    response = await client.get(request_url, params=params)
-                    response.raise_for_status()
-                    data = response.json()
+                    data = await self._request_with_retry(
+                        client, PAGESPEED_API_URL, params
+                    )
                 except httpx.HTTPError as exc:
                     logger.error("PageSpeed API error for %s: %s", url, exc)
-                    raise
+                    return {
+                        "url": url,
+                        "strategy": strategy,
+                        "error": str(exc),
+                        "scores": {},
+                        "performance_score": 0,
+                        "seo_score": 0,
+                        "accessibility_score": 0,
+                        "best_practices_score": 0,
+                        "metrics": {},
+                        "opportunities": [],
+                    }
 
         # Parse results
         lighthouse = data.get("lighthouseResult", {})
@@ -123,6 +197,18 @@ class PageSpeedInsights:
             Dict with LCP, INP, CLS, TTFB, FCP, and performance score.
         """
         analysis = await self.analyze_url(url, strategy=strategy, categories=["performance"])
+        if "error" in analysis:
+            return {
+                "url": url,
+                "strategy": strategy,
+                "error": analysis["error"],
+                "lcp": None,
+                "inp": None,
+                "cls": None,
+                "ttfb": None,
+                "fcp": None,
+                "performance_score": 0,
+            }
         metrics = analysis.get("metrics", {})
         return {
             "url": url,
@@ -141,24 +227,24 @@ class PageSpeedInsights:
         strategy: str = "mobile",
         categories: Optional[list[str]] = None,
     ) -> list[dict[str, Any]]:
-        """Analyze multiple URLs concurrently (respecting rate limits).
+        """Analyze multiple URLs sequentially (respecting rate limits).
 
         Returns:
             List of analysis result dicts.
         """
-        tasks = [
-            self.analyze_url(url, strategy=strategy, categories=categories)
-            for url in urls
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        output = []
-        for url, result in zip(urls, results):
-            if isinstance(result, Exception):
-                logger.error("Failed to analyze %s: %s", url, result)
-                output.append({"url": url, "error": str(result)})
-            else:
-                output.append(result)
-        return output
+        results = []
+        for url in urls:
+            try:
+                result = await self.analyze_url(
+                    url, strategy=strategy, categories=categories
+                )
+                results.append(result)
+            except Exception as exc:
+                logger.error("Failed to analyze %s: %s", url, exc)
+                results.append({"url": url, "error": str(exc)})
+            # Small delay between requests
+            await asyncio.sleep(2)
+        return results
 
     @staticmethod
     def _extract_metrics(audits: dict) -> dict[str, Optional[float]]:

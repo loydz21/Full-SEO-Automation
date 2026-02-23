@@ -734,6 +734,27 @@ def _render_stats_tab():
 
 def _render_export_tab():
     st.subheader("📥 Export Data")
+    # --- PDF Report Download ---
+    st.markdown("**📄 Professional PDF Report**")
+    st.markdown("Generate a narrative PDF report with backlink analysis and charts.")
+    if st.button("Generate PDF Report", type="primary", key="lb_pdf_btn"):
+        try:
+            from dashboard.export_helper import generate_link_building_pdf
+            lb_data = {
+                "domain": st.session_state.get("lb_domain", ""),
+                "prospects": st.session_state.get("lb_prospects", []),
+                "backlinks": st.session_state.get("lb_backlinks", []),
+                "outreach_stats": st.session_state.get("lb_outreach_stats", {}),
+                "toxic_links": st.session_state.get("lb_toxic_links", []),
+            }
+            pdf_path = generate_link_building_pdf(lb_data)
+            with open(pdf_path, "rb") as fh:
+                st.download_button("⬇️ Download PDF", fh.read(),
+                    file_name=pdf_path.split("/")[-1], mime="application/pdf", key="lb_pdf_dl")
+            st.success("PDF report generated!")
+        except Exception as exc:
+            st.error("PDF generation failed: " + str(exc))
+    st.divider()
 
     export_type = st.selectbox(
         "Export Type",

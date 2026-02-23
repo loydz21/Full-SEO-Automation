@@ -483,6 +483,24 @@ def _render_batch_tab(writer: BlogContentWriter) -> None:
 def _render_export_tab(manager: ContentManager) -> None:
     """Tab: Export."""
     st.markdown("### Export Content")
+    # --- PDF Report Download ---
+    st.markdown("**📄 Professional PDF Report**")
+    st.markdown("Generate a narrative PDF report of your content analysis with quality scores.")
+    if st.button("Generate PDF Report", type="primary", key="bc_pdf_btn"):
+        try:
+            from dashboard.export_helper import generate_content_pdf
+            content_data = {
+                "articles": st.session_state.get("bc_articles", []),
+                "quality_stats": st.session_state.get("bc_quality_stats", {}),
+            }
+            pdf_path = generate_content_pdf(content_data)
+            with open(pdf_path, "rb") as fh:
+                st.download_button("⬇️ Download PDF", fh.read(),
+                    file_name=pdf_path.split("/")[-1], mime="application/pdf", key="bc_pdf_dl")
+            st.success("PDF report generated!")
+        except Exception as exc:
+            st.error("PDF generation failed: " + str(exc))
+    st.divider()
     st.markdown("Download generated content in various formats.")
 
     # Determine available articles

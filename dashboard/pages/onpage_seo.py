@@ -698,6 +698,21 @@ def _tab_eeat():
 
 def _tab_export():
     st.header("Export Analysis")
+    # --- PDF Report Download ---
+    st.markdown("### 📥 Download PDF Report")
+    st.markdown("Generate a professional narrative PDF report with radar charts and analysis.")
+    if st.button("Generate PDF Report", type="primary", key="op_pdf_btn"):
+        try:
+            from dashboard.export_helper import generate_onpage_seo_pdf
+            onpage_data = st.session_state.get("op_analysis_result", {})
+            pdf_path = generate_onpage_seo_pdf(onpage_data)
+            with open(pdf_path, "rb") as fh:
+                st.download_button("⬇️ Download PDF", fh.read(),
+                    file_name=pdf_path.split("/")[-1], mime="application/pdf", key="op_pdf_dl")
+            st.success("PDF report generated!")
+        except Exception as exc:
+            st.error("PDF generation failed: " + str(exc))
+    st.divider()
 
     analysis = st.session_state.op_analysis
     if not analysis:

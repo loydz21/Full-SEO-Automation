@@ -912,6 +912,21 @@ def _render_branding_tab():
 def _render_export_tab():
     """Export reports in various formats and view history."""
     st.subheader("Export Center")
+    # --- PDF Report Download ---
+    st.markdown("**📄 Professional Full SEO Report (PDF)**")
+    st.markdown("Generate a comprehensive narrative PDF report covering all modules with charts and analysis.")
+    if st.button("Generate Full PDF Report", type="primary", key="rp_pdf_btn"):
+        try:
+            from dashboard.export_helper import generate_full_report_pdf
+            report_data = st.session_state.get("report_data", {})
+            pdf_path = generate_full_report_pdf(report_data)
+            with open(pdf_path, "rb") as fh:
+                st.download_button("⬇️ Download Full PDF Report", fh.read(),
+                    file_name=pdf_path.split("/")[-1], mime="application/pdf", key="rp_pdf_dl")
+            st.success("Full PDF report generated!")
+        except Exception as exc:
+            st.error("PDF generation failed: " + str(exc))
+    st.divider()
 
     report_data = st.session_state.get("reports_full_data")
 

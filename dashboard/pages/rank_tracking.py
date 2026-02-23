@@ -459,8 +459,28 @@ def _render_serp_features_tab():
 # ------------------------------------------------------------------
 
 def _render_export_tab():
-    """Export ranking data as CSV or JSON."""
+    """Export ranking data as CSV, JSON, or PDF."""
     st.subheader("📥 Export Ranking Data")
+    # --- PDF Report Download ---
+    st.markdown("**📄 Professional PDF Report**")
+    st.markdown("Generate a narrative PDF report with ranking charts and analysis.")
+    if st.button("Generate PDF Report", type="primary", key="rt_pdf_btn"):
+        try:
+            from dashboard.export_helper import generate_rank_tracking_pdf
+            rt_data = {
+                "domain": st.session_state.get("rt_domain", ""),
+                "rankings": st.session_state.get("rt_rankings", []),
+                "visibility_score": st.session_state.get("rt_visibility", 0),
+                "opportunities": st.session_state.get("rt_opportunities", []),
+            }
+            pdf_path = generate_rank_tracking_pdf(rt_data)
+            with open(pdf_path, "rb") as fh:
+                st.download_button("⬇️ Download PDF", fh.read(),
+                    file_name=pdf_path.split("/")[-1], mime="application/pdf", key="rt_pdf_dl")
+            st.success("PDF report generated!")
+        except Exception as exc:
+            st.error("PDF generation failed: " + str(exc))
+    st.divider()
 
     domain = st.text_input(
         "Domain to export", key="export_domain", placeholder="example.com"

@@ -860,6 +860,25 @@ def render_topical_research_page() -> None:
 
     researcher = _get_researcher()
 
+    # --- PDF Report Download ---
+    with st.expander("📄 Download PDF Report", expanded=False):
+        st.markdown("Generate a professional narrative PDF report of your topical research.")
+        if st.button("Generate PDF Report", type="primary", key="tr_pdf_btn"):
+            try:
+                from dashboard.export_helper import generate_topical_research_pdf
+                topic_data = {
+                    "niche": st.session_state.get("tr_niche", ""),
+                    "topics": st.session_state.get("tr_topics", []),
+                    "content_gaps": st.session_state.get("tr_content_gaps", []),
+                }
+                pdf_path = generate_topical_research_pdf(topic_data)
+                with open(pdf_path, "rb") as fh:
+                    st.download_button("⬇️ Download PDF", fh.read(),
+                        file_name=pdf_path.split("/")[-1], mime="application/pdf", key="tr_pdf_dl")
+                st.success("PDF report generated!")
+            except Exception as exc:
+                st.error("PDF generation failed: " + str(exc))
+
     # Tab-based navigation for sub-sections
     tabs = st.tabs([
         "\U0001f50d Niche Analysis",

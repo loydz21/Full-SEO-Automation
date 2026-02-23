@@ -818,7 +818,6 @@ class TechnicalAuditor:
                 "diff": issues2_count - issues1_count,
             },
         }
-
     # ------------------------------------------------------------------
     # Export
     # ------------------------------------------------------------------
@@ -829,13 +828,15 @@ class TechnicalAuditor:
         filepath: str,
         fmt: str = "json",
     ) -> str:
-        """Export the audit to *filepath* in JSON or HTML format."""
+        """Export the audit to *filepath* in JSON, HTML, or PDF format."""
         os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
 
         if fmt == "html":
             html = self._render_html_report(audit_data)
             with open(filepath, "w", encoding="utf-8") as fh:
                 fh.write(html)
+        elif fmt == "pdf":
+            self.export_as_pdf(audit_data, filepath)
         else:
             safe = self._make_serialisable(audit_data)
             with open(filepath, "w", encoding="utf-8") as fh:
@@ -857,7 +858,7 @@ class TechnicalAuditor:
 
     @staticmethod
     def _render_html_report(d: dict) -> str:
-        """Produce a self-contained HTML audit report."""
+        """Produce a self-contained, professional HTML audit report."""
         domain = d.get("domain", "Unknown")
         score = d.get("overall_score", 0)
         grade = d.get("grade", "?")
@@ -867,111 +868,529 @@ class TechnicalAuditor:
         recs = d.get("recommendations", [])
         summary = d.get("crawl_summary", {})
         ts = d.get("timestamp", "")
+        speed_data = d.get("speed_data", {})
+        elapsed = d.get("elapsed_seconds", 0)
 
-        grade_color = {
-            "A": "#22c55e", "B": "#84cc16", "C": "#eab308",
+        grade_colors = {
+            "A": "#10b981", "B": "#22c55e", "C": "#eab308",
             "D": "#f97316", "F": "#ef4444",
-        }.get(grade, "#6b7280")
+        }
+        grade_color = grade_colors.get(grade, "#6b7280")
 
-        # Build category rows
+        error_count = len([i for i in issues if i.get("severity") == "error"])
+        warning_count = len([i for i in issues if i.get("severity") == "warning"])
+        info_count = len([i for i in issues if i.get("severity") == "info"])
+
+        # --- Category score bars ---
         cat_rows = ""
         for cat, val in cat_scores.items():
-            bar_color = "#22c55e" if val >= 80 else ("#eab308" if val >= 60 else "#ef4444")
+            if val >= 80:
+                bar_color = "#10b981"
+                label_class = "score-good"
+            elif val >= 60:
+                bar_color = "#eab308"
+                label_class = "score-warn"
+            else:
+                bar_color = "#ef4444"
+                label_class = "score-bad"
+            cat_label = cat.replace("_", " ").title()
             cat_rows += (
-                "<tr>"
-                "<td style=\"padding:8px;text-transform:capitalize;\">{cat}</td>"
-                "<td style=\"padding:8px;\"><div style=\"background:#e5e7eb;border-radius:6px;overflow:hidden;\">"
-                "<div style=\"width:{val}%;background:{color};height:22px;border-radius:6px;\"></div></div></td>"
-                "<td style=\"padding:8px;font-weight:bold;\">{val}</td>"
-                "</tr>"
-            ).format(cat=cat.replace("_", " "), val=val, color=bar_color)
+                "<div class=\"cat-row\">\n"
+                "  <div class=\"cat-name\">{cat}</div>\n"
+                "  <div class=\"cat-bar-track\">\n"
+                "    <div class=\"cat-bar-fill\" style=\"width:{val}%;background:{color};\"></div>\n"
+                "  </div>\n"
+                "  <div class=\"cat-val {cls}\">{val}</div>\n"
+                "</div>\n"
+            ).format(cat=cat_label, val=val, color=bar_color, cls=label_class)
 
-        # Build issues rows
+        # --- Issues table rows ---
         issue_rows = ""
-        sev_colors = {"error": "#ef4444", "warning": "#f97316", "info": "#3b82f6"}
+        sev_badge = {
+            "error": "<span class=\"badge badge-error\">ERROR</span>",
+            "warning": "<span class=\"badge badge-warning\">WARNING</span>",
+            "info": "<span class=\"badge badge-info\">INFO</span>",
+        }
         for iss in issues:
             sev = iss.get("severity", "info")
-            sc = sev_colors.get(sev, "#6b7280")
+            badge = sev_badge.get(sev, sev_badge["info"])
             issue_rows += (
-                "<tr>"
-                "<td style=\"padding:6px;\"><span style=\"color:{sc};font-weight:bold;\">{sev}</span></td>"
-                "<td style=\"padding:6px;\">{cat}</td>"
-                "<td style=\"padding:6px;\">{desc}</td>"
-                "<td style=\"padding:6px;\">{fix}</td>"
-                "</tr>"
+                "<tr>\n"
+                "  <td>{badge}</td>\n"
+                "  <td>{cat}</td>\n"
+                "  <td>{desc}</td>\n"
+                "  <td class=\"fix-cell\">{fix}</td>\n"
+                "</tr>\n"
             ).format(
-                sc=sc, sev=sev.upper(),
-                cat=iss.get("category", ""),
+                badge=badge,
+                cat=iss.get("category", "").replace("_", " ").title(),
                 desc=iss.get("description", ""),
                 fix=iss.get("how_to_fix", ""),
             )
 
-        # Build passed items
-        passed_items = ""
-        for p in passed:
-            passed_items += "<li style=\"padding:4px 0;color:#22c55e;\">{item}</li>".format(item=p)
+        # --- Core Web Vitals ---
+        cwv_html = ""
+        mobile_perf = speed_data.get("mobile", {}) if isinstance(speed_data, dict) else {}
+        desktop_perf = speed_data.get("desktop", {}) if isinstance(speed_data, dict) else {}
+        if mobile_perf or desktop_perf:
+            def _cwv_card(label, value, unit, good_threshold, poor_threshold):
+                if value is None:
+                    return (
+                        "<div class=\"cwv-card\">\n"
+                        "  <div class=\"cwv-label\">{label}</div>\n"
+                        "  <div class=\"cwv-value cwv-na\">N/A</div>\n"
+                        "</div>\n"
+                    ).format(label=label)
+                if isinstance(value, float) and value < 1:
+                    display = "{:.3f}".format(value)
+                else:
+                    display = str(round(value))
+                if value <= good_threshold:
+                    cls = "cwv-good"
+                elif value <= poor_threshold:
+                    cls = "cwv-warn"
+                else:
+                    cls = "cwv-bad"
+                return (
+                    "<div class=\"cwv-card\">\n"
+                    "  <div class=\"cwv-label\">{label}</div>\n"
+                    "  <div class=\"cwv-value {cls}\">{val}{unit}</div>\n"
+                    "</div>\n"
+                ).format(label=label, cls=cls, val=display, unit=unit)
 
-        # Build recommendations
-        rec_items = ""
-        for r in recs:
-            steps = ""
+            lcp = mobile_perf.get("lcp")
+            fid = mobile_perf.get("fid")
+            cls_val = mobile_perf.get("cls")
+            fcp = mobile_perf.get("fcp")
+            ttfb = mobile_perf.get("ttfb")
+            m_score = mobile_perf.get("performance_score")
+            d_score = desktop_perf.get("performance_score")
+
+            perf_score_html = ""
+            if m_score is not None or d_score is not None:
+                perf_score_html = "<div class=\"perf-scores\">\n"
+                if m_score is not None:
+                    perf_score_html += (
+                        "  <div class=\"perf-score-item\">\n"
+                        "    <span class=\"perf-label\">Mobile</span>\n"
+                        "    <span class=\"perf-val\">{s}</span>\n"
+                        "  </div>\n"
+                    ).format(s=m_score)
+                if d_score is not None:
+                    perf_score_html += (
+                        "  <div class=\"perf-score-item\">\n"
+                        "    <span class=\"perf-label\">Desktop</span>\n"
+                        "    <span class=\"perf-val\">{s}</span>\n"
+                        "  </div>\n"
+                    ).format(s=d_score)
+                perf_score_html += "</div>\n"
+
+            cwv_cards = ""
+            cwv_cards += _cwv_card("LCP", lcp, "ms", 2500, 4000)
+            cwv_cards += _cwv_card("FID", fid, "ms", 100, 300)
+            cwv_cards += _cwv_card("CLS", cls_val, "", 0.1, 0.25)
+            cwv_cards += _cwv_card("FCP", fcp, "ms", 1800, 3000)
+            cwv_cards += _cwv_card("TTFB", ttfb, "ms", 800, 1800)
+
+            cwv_html = (
+                "<div class=\"section\">\n"
+                "  <h2>Core Web Vitals</h2>\n"
+                "  {perf_scores}\n"
+                "  <div class=\"cwv-grid\">\n"
+                "    {cards}\n"
+                "  </div>\n"
+                "</div>\n"
+            ).format(perf_scores=perf_score_html, cards=cwv_cards)
+
+        # --- Passed checks ---
+        passed_html = ""
+        for p in passed:
+            passed_html += (
+                "<div class=\"passed-item\">\n"
+                "  <span class=\"check-icon\">&#10004;</span>\n"
+                "  <span>{item}</span>\n"
+                "</div>\n"
+            ).format(item=p)
+
+        # --- Recommendations ---
+        rec_html = ""
+        for idx, r in enumerate(recs, 1):
+            pri = r.get("priority", "P3")
+            pri_cls = "pri-high" if pri in ("P1", "P0") else ("pri-med" if pri == "P2" else "pri-low")
+            steps_html = ""
             for s in r.get("implementation_steps", []):
-                steps += "<li>{s}</li>".format(s=s)
-            rec_items += (
-                "<div style=\"border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;\">" 
-                "<h3 style=\"margin:0 0 8px;\">[{pri}] {title}</h3>"
-                "<p>{desc}</p>"
-                "<p><strong>Impact:</strong> {impact} | <strong>Category:</strong> {cat}</p>"
-                "<ol>{steps}</ol>"
-                "</div>"
+                steps_html += "<li>{s}</li>\n".format(s=s)
+            rec_html += (
+                "<div class=\"rec-card\">\n"
+                "  <div class=\"rec-header\">\n"
+                "    <span class=\"rec-num\">{idx}</span>\n"
+                "    <span class=\"rec-title\">{title}</span>\n"
+                "    <span class=\"badge {pri_cls}\">{pri}</span>\n"
+                "  </div>\n"
+                "  <p class=\"rec-desc\">{desc}</p>\n"
+                "  <div class=\"rec-meta\">\n"
+                "    <span><strong>Impact:</strong> {impact}</span>\n"
+                "    <span><strong>Category:</strong> {cat}</span>\n"
+                "  </div>\n"
+                "  <ol class=\"rec-steps\">{steps}</ol>\n"
+                "</div>\n"
             ).format(
-                pri=r.get("priority", "P3"),
+                idx=idx,
                 title=r.get("title", ""),
+                pri=pri, pri_cls=pri_cls,
                 desc=r.get("description", ""),
-                impact=r.get("estimated_impact", "?"),
-                cat=r.get("category", ""),
-                steps=steps,
+                impact=r.get("estimated_impact", "Unknown"),
+                cat=r.get("category", "").replace("_", " ").title(),
+                steps=steps_html,
             )
 
+        # --- Crawl summary stats ---
+        crawl_stats_html = ""
+        stat_items = [
+            ("Total Pages", summary.get("total_pages", 0)),
+            ("HTML Pages", summary.get("html_pages", 0)),
+            ("2xx Responses", summary.get("status_2xx", 0)),
+            ("3xx Redirects", summary.get("status_3xx", 0)),
+            ("4xx Errors", summary.get("status_4xx", 0)),
+            ("5xx Errors", summary.get("status_5xx", 0)),
+            ("Avg Word Count", summary.get("avg_word_count", 0)),
+            ("Internal Links", summary.get("total_internal_links", 0)),
+            ("External Links", summary.get("total_external_links", 0)),
+            ("Images Found", summary.get("total_images", 0)),
+        ]
+        for label, val in stat_items:
+            crawl_stats_html += (
+                "<div class=\"stat-card\">\n"
+                "  <div class=\"stat-value\">{val}</div>\n"
+                "  <div class=\"stat-label\">{label}</div>\n"
+                "</div>\n"
+            ).format(val=val, label=label)
+
+        # --- Full HTML ---
         html = (
-            "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">"
-            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">"
-            "<title>SEO Audit — {domain}</title>"
-            "<style>body{{font-family:system-ui,sans-serif;max-width:1000px;margin:0 auto;padding:20px;"
-            "background:#f8fafc;color:#1e293b;}}table{{width:100%;border-collapse:collapse;}}"
-            "th{{text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;}}"
-            "tr:nth-child(even){{background:#f1f5f9;}}</style></head><body>"
-            "<h1>Technical SEO Audit Report</h1>"
-            "<p><strong>Domain:</strong> {domain} | <strong>Date:</strong> {ts}</p>"
-            "<div style=\"display:flex;gap:20px;margin:20px 0;\">"
-            "<div style=\"background:white;padding:24px;border-radius:12px;text-align:center;"
-            "border:1px solid #e2e8f0;flex:1;\">"
-            "<div style=\"font-size:3rem;font-weight:bold;color:{gc};\">{grade}</div>"
-            "<div>Overall Grade</div></div>"
-            "<div style=\"background:white;padding:24px;border-radius:12px;text-align:center;"
-            "border:1px solid #e2e8f0;flex:1;\">"
-            "<div style=\"font-size:3rem;font-weight:bold;\">{score}</div>"
-            "<div>Overall Score</div></div>"
-            "<div style=\"background:white;padding:24px;border-radius:12px;text-align:center;"
-            "border:1px solid #e2e8f0;flex:1;\">"
-            "<div style=\"font-size:3rem;font-weight:bold;\">{npages}</div>"
-            "<div>Pages Crawled</div></div></div>"
-            "<h2>Category Scores</h2>"
-            "<table>{cat_rows}</table>"
-            "<h2>Issues ({ni})</h2>"
-            "<table><tr><th>Severity</th><th>Category</th><th>Description</th><th>Fix</th></tr>"
-            "{issue_rows}</table>"
-            "<h2>Passed Checks</h2><ul>{passed_items}</ul>"
-            "<h2>Recommendations</h2>{rec_items}"
-            "</body></html>"
+            "<!DOCTYPE html>\n"
+            "<html lang=\"en\">\n"
+            "<head>\n"
+            "<meta charset=\"UTF-8\">\n"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+            "<title>Technical SEO Audit &mdash; {domain}</title>\n"
+            "<style>\n"
+            "  :root {{\n"
+            "    --navy: #0f172a;\n"
+            "    --navy-light: #1e293b;\n"
+            "    --blue: #3b82f6;\n"
+            "    --blue-light: #dbeafe;\n"
+            "    --green: #10b981;\n"
+            "    --green-light: #d1fae5;\n"
+            "    --yellow: #eab308;\n"
+            "    --yellow-light: #fef9c3;\n"
+            "    --red: #ef4444;\n"
+            "    --red-light: #fee2e2;\n"
+            "    --orange: #f97316;\n"
+            "    --gray-50: #f8fafc;\n"
+            "    --gray-100: #f1f5f9;\n"
+            "    --gray-200: #e2e8f0;\n"
+            "    --gray-300: #cbd5e1;\n"
+            "    --gray-500: #64748b;\n"
+            "    --gray-700: #334155;\n"
+            "    --gray-900: #0f172a;\n"
+            "    --white: #ffffff;\n"
+            "    --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);\n"
+            "    --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);\n"
+            "    --radius: 12px;\n"
+            "  }}\n"
+            "  * {{ margin: 0; padding: 0; box-sizing: border-box; }}\n"
+            "  body {{\n"
+            "    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;\n"
+            "    background: var(--gray-50);\n"
+            "    color: var(--gray-900);\n"
+            "    line-height: 1.6;\n"
+            "    -webkit-print-color-adjust: exact;\n"
+            "    print-color-adjust: exact;\n"
+            "  }}\n"
+            "  .container {{ max-width: 1100px; margin: 0 auto; padding: 0 24px; }}\n"
+            "  \n"
+            "  /* Header */\n"
+            "  .header {{\n"
+            "    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);\n"
+            "    color: var(--white);\n"
+            "    padding: 48px 0 40px;\n"
+            "  }}\n"
+            "  .header-inner {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }}\n"
+            "  .brand {{ font-size: 13px; text-transform: uppercase; letter-spacing: 3px; opacity: 0.7; margin-bottom: 8px; }}\n"
+            "  .header h1 {{ font-size: 28px; font-weight: 700; margin-bottom: 4px; }}\n"
+            "  .header-meta {{ font-size: 14px; opacity: 0.8; }}\n"
+            "  .header-badge {{\n"
+            "    text-align: center;\n"
+            "    background: rgba(255,255,255,0.1);\n"
+            "    border-radius: var(--radius);\n"
+            "    padding: 20px 32px;\n"
+            "    backdrop-filter: blur(10px);\n"
+            "  }}\n"
+            "  .header-badge .grade {{\n"
+            "    font-size: 56px; font-weight: 800; line-height: 1;\n"
+            "  }}\n"
+            "  .header-badge .grade-label {{ font-size: 13px; opacity: 0.8; margin-top: 4px; }}\n"
+            "  \n"
+            "  /* Sections */\n"
+            "  .section {{ margin: 32px 0; }}\n"
+            "  .section h2 {{\n"
+            "    font-size: 20px; font-weight: 700; color: var(--navy);\n"
+            "    border-bottom: 2px solid var(--gray-200); padding-bottom: 8px; margin-bottom: 20px;\n"
+            "  }}\n"
+            "  \n"
+            "  /* Executive Summary Cards */\n"
+            "  .summary-grid {{\n"
+            "    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 32px 0;\n"
+            "  }}\n"
+            "  .summary-card {{\n"
+            "    background: var(--white); border-radius: var(--radius); padding: 24px;\n"
+            "    text-align: center; box-shadow: var(--shadow); border: 1px solid var(--gray-200);\n"
+            "  }}\n"
+            "  .summary-card .big-num {{ font-size: 36px; font-weight: 800; line-height: 1.2; }}\n"
+            "  .summary-card .card-label {{ font-size: 13px; color: var(--gray-500); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }}\n"
+            "  \n"
+            "  /* Category scores */\n"
+            "  .cat-row {{ display: flex; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--gray-100); }}\n"
+            "  .cat-name {{ width: 160px; font-weight: 600; font-size: 14px; }}\n"
+            "  .cat-bar-track {{ flex: 1; height: 24px; background: var(--gray-100); border-radius: 12px; overflow: hidden; }}\n"
+            "  .cat-bar-fill {{ height: 100%; border-radius: 12px; transition: width 0.3s; min-width: 4px; }}\n"
+            "  .cat-val {{ width: 48px; text-align: right; font-weight: 700; font-size: 15px; }}\n"
+            "  .score-good {{ color: var(--green); }}\n"
+            "  .score-warn {{ color: var(--yellow); }}\n"
+            "  .score-bad {{ color: var(--red); }}\n"
+            "  \n"
+            "  /* CWV */\n"
+            "  .cwv-grid {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }}\n"
+            "  .cwv-card {{\n"
+            "    background: var(--white); border-radius: var(--radius); padding: 20px;\n"
+            "    text-align: center; box-shadow: var(--shadow); border: 1px solid var(--gray-200);\n"
+            "  }}\n"
+            "  .cwv-label {{ font-size: 12px; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }}\n"
+            "  .cwv-value {{ font-size: 24px; font-weight: 800; }}\n"
+            "  .cwv-good {{ color: var(--green); }}\n"
+            "  .cwv-warn {{ color: var(--yellow); }}\n"
+            "  .cwv-bad {{ color: var(--red); }}\n"
+            "  .cwv-na {{ color: var(--gray-300); }}\n"
+            "  .perf-scores {{ display: flex; gap: 24px; margin-bottom: 16px; }}\n"
+            "  .perf-score-item {{ display: flex; align-items: center; gap: 8px; }}\n"
+            "  .perf-label {{ font-size: 13px; color: var(--gray-500); font-weight: 600; }}\n"
+            "  .perf-val {{ font-size: 18px; font-weight: 800; color: var(--navy); }}\n"
+            "  \n"
+            "  /* Issues table */\n"
+            "  .issues-table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}\n"
+            "  .issues-table th {{\n"
+            "    background: var(--navy); color: var(--white); padding: 12px 16px;\n"
+            "    text-align: left; font-weight: 600; font-size: 13px;\n"
+            "    text-transform: uppercase; letter-spacing: 0.5px;\n"
+            "  }}\n"
+            "  .issues-table th:first-child {{ border-radius: 8px 0 0 0; }}\n"
+            "  .issues-table th:last-child {{ border-radius: 0 8px 0 0; }}\n"
+            "  .issues-table td {{ padding: 10px 16px; border-bottom: 1px solid var(--gray-100); vertical-align: top; }}\n"
+            "  .issues-table tr:nth-child(even) {{ background: var(--gray-50); }}\n"
+            "  .issues-table tr:hover {{ background: var(--blue-light); }}\n"
+            "  .fix-cell {{ font-size: 13px; color: var(--gray-700); }}\n"
+            "  \n"
+            "  /* Badges */\n"
+            "  .badge {{\n"
+            "    display: inline-block; padding: 3px 10px; border-radius: 20px;\n"
+            "    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;\n"
+            "  }}\n"
+            "  .badge-error {{ background: var(--red-light); color: var(--red); }}\n"
+            "  .badge-warning {{ background: var(--yellow-light); color: #92400e; }}\n"
+            "  .badge-info {{ background: var(--blue-light); color: var(--blue); }}\n"
+            "  .pri-high {{ background: var(--red-light); color: var(--red); }}\n"
+            "  .pri-med {{ background: var(--yellow-light); color: #92400e; }}\n"
+            "  .pri-low {{ background: var(--green-light); color: #065f46; }}\n"
+            "  \n"
+            "  /* Passed checks */\n"
+            "  .passed-item {{\n"
+            "    display: flex; align-items: center; gap: 10px;\n"
+            "    padding: 8px 16px; margin-bottom: 4px;\n"
+            "    background: var(--white); border-radius: 8px; border: 1px solid var(--gray-100);\n"
+            "  }}\n"
+            "  .check-icon {{ color: var(--green); font-size: 18px; font-weight: bold; }}\n"
+            "  \n"
+            "  /* Recommendations */\n"
+            "  .rec-card {{\n"
+            "    background: var(--white); border-radius: var(--radius); padding: 24px;\n"
+            "    margin-bottom: 16px; box-shadow: var(--shadow); border: 1px solid var(--gray-200);\n"
+            "  }}\n"
+            "  .rec-header {{ display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }}\n"
+            "  .rec-num {{\n"
+            "    background: var(--navy); color: var(--white); width: 32px; height: 32px;\n"
+            "    border-radius: 50%; display: flex; align-items: center; justify-content: center;\n"
+            "    font-weight: 700; font-size: 14px; flex-shrink: 0;\n"
+            "  }}\n"
+            "  .rec-title {{ font-weight: 700; font-size: 16px; flex: 1; }}\n"
+            "  .rec-desc {{ color: var(--gray-700); margin-bottom: 12px; font-size: 14px; }}\n"
+            "  .rec-meta {{ display: flex; gap: 24px; font-size: 13px; color: var(--gray-500); margin-bottom: 12px; }}\n"
+            "  .rec-steps {{ padding-left: 20px; font-size: 14px; color: var(--gray-700); }}\n"
+            "  .rec-steps li {{ margin-bottom: 4px; }}\n"
+            "  \n"
+            "  /* Crawl stats */\n"
+            "  .stats-grid {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }}\n"
+            "  .stat-card {{\n"
+            "    background: var(--white); border-radius: var(--radius); padding: 20px;\n"
+            "    text-align: center; box-shadow: var(--shadow); border: 1px solid var(--gray-200);\n"
+            "  }}\n"
+            "  .stat-value {{ font-size: 24px; font-weight: 800; color: var(--navy); }}\n"
+            "  .stat-label {{ font-size: 12px; color: var(--gray-500); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }}\n"
+            "  \n"
+            "  /* Footer */\n"
+            "  .footer {{\n"
+            "    margin-top: 48px; padding: 24px 0; border-top: 2px solid var(--gray-200);\n"
+            "    text-align: center; font-size: 13px; color: var(--gray-500);\n"
+            "  }}\n"
+            "  .footer strong {{ color: var(--navy); }}\n"
+            "  \n"
+            "  /* Print */\n"
+            "  @media print {{\n"
+            "    body {{ background: white; }}\n"
+            "    .container {{ max-width: 100%; padding: 0; }}\n"
+            "    .section {{ page-break-inside: avoid; }}\n"
+            "    .rec-card {{ page-break-inside: avoid; }}\n"
+            "    .summary-grid {{ page-break-inside: avoid; }}\n"
+            "    .header {{ page-break-after: avoid; }}\n"
+            "    h2 {{ page-break-after: avoid; }}\n"
+            "    .issues-table {{ font-size: 12px; }}\n"
+            "    .issues-table tr {{ page-break-inside: avoid; }}\n"
+            "  }}\n"
+            "  @page {{ margin: 1.5cm; size: A4; }}\n"
+            "</style>\n"
+            "</head>\n"
+            "<body>\n"
+            "\n"
+            "<!-- Header -->\n"
+            "<div class=\"header\">\n"
+            "  <div class=\"container\">\n"
+            "    <div class=\"header-inner\">\n"
+            "      <div>\n"
+            "        <div class=\"brand\">Technical SEO Audit</div>\n"
+            "        <h1>{domain}</h1>\n"
+            "        <div class=\"header-meta\">Generated on {ts} &bull; Completed in {elapsed}s</div>\n"
+            "      </div>\n"
+            "      <div class=\"header-badge\">\n"
+            "        <div class=\"grade\" style=\"color:{gc};\">{grade}</div>\n"
+            "        <div class=\"grade-label\">Overall Grade</div>\n"
+            "      </div>\n"
+            "    </div>\n"
+            "  </div>\n"
+            "</div>\n"
+            "\n"
+            "<div class=\"container\">\n"
+            "\n"
+            "<!-- Executive Summary -->\n"
+            "<div class=\"summary-grid\">\n"
+            "  <div class=\"summary-card\">\n"
+            "    <div class=\"big-num\" style=\"color:{gc};\">{score}</div>\n"
+            "    <div class=\"card-label\">Overall Score</div>\n"
+            "  </div>\n"
+            "  <div class=\"summary-card\">\n"
+            "    <div class=\"big-num\" style=\"color:var(--red);\">{errors}</div>\n"
+            "    <div class=\"card-label\">Errors</div>\n"
+            "  </div>\n"
+            "  <div class=\"summary-card\">\n"
+            "    <div class=\"big-num\" style=\"color:var(--orange);\">{warnings}</div>\n"
+            "    <div class=\"card-label\">Warnings</div>\n"
+            "  </div>\n"
+            "  <div class=\"summary-card\">\n"
+            "    <div class=\"big-num\">{npages}</div>\n"
+            "    <div class=\"card-label\">Pages Crawled</div>\n"
+            "  </div>\n"
+            "</div>\n"
+            "\n"
+            "<!-- Category Scores -->\n"
+            "<div class=\"section\">\n"
+            "  <h2>Category Scores</h2>\n"
+            "  {cat_rows}\n"
+            "</div>\n"
+            "\n"
+            "<!-- Core Web Vitals -->\n"
+            "{cwv_html}\n"
+            "\n"
+            "<!-- Issues -->\n"
+            "<div class=\"section\">\n"
+            "  <h2>Issues ({ni})</h2>\n"
+            "  <div style=\"margin-bottom:12px;\">\n"
+            "    <span class=\"badge badge-error\">{errors} Errors</span>&nbsp;\n"
+            "    <span class=\"badge badge-warning\">{warnings} Warnings</span>&nbsp;\n"
+            "    <span class=\"badge badge-info\">{infos} Info</span>\n"
+            "  </div>\n"
+            "  <table class=\"issues-table\">\n"
+            "    <thead><tr><th>Severity</th><th>Category</th><th>Description</th><th>How to Fix</th></tr></thead>\n"
+            "    <tbody>{issue_rows}</tbody>\n"
+            "  </table>\n"
+            "</div>\n"
+            "\n"
+            "<!-- Passed Checks -->\n"
+            "<div class=\"section\">\n"
+            "  <h2>Passed Checks ({np})</h2>\n"
+            "  {passed_html}\n"
+            "</div>\n"
+            "\n"
+            "<!-- Recommendations -->\n"
+            "<div class=\"section\">\n"
+            "  <h2>Prioritized Recommendations</h2>\n"
+            "  {rec_html}\n"
+            "</div>\n"
+            "\n"
+            "<!-- Crawl Summary -->\n"
+            "<div class=\"section\">\n"
+            "  <h2>Crawl Summary</h2>\n"
+            "  <div class=\"stats-grid\">\n"
+            "    {crawl_stats}\n"
+            "  </div>\n"
+            "</div>\n"
+            "\n"
+            "<!-- Footer -->\n"
+            "<div class=\"footer\">\n"
+            "  <p><strong>Technical SEO Audit Report</strong> &mdash; {domain}</p>\n"
+            "  <p>Generated on {ts} &bull; Powered by Full SEO Automation</p>\n"
+            "</div>\n"
+            "\n"
+            "</div><!-- /container -->\n"
+            "</body>\n"
+            "</html>\n"
         ).format(
-            domain=domain, ts=ts, gc=grade_color, grade=grade,
-            score=score, npages=summary.get("total_pages", 0),
-            cat_rows=cat_rows, ni=len(issues),
-            issue_rows=issue_rows, passed_items=passed_items,
-            rec_items=rec_items,
+            domain=domain,
+            ts=ts,
+            elapsed=elapsed,
+            gc=grade_color,
+            grade=grade,
+            score=score,
+            errors=error_count,
+            warnings=warning_count,
+            infos=info_count,
+            npages=summary.get("total_pages", 0),
+            cat_rows=cat_rows,
+            cwv_html=cwv_html,
+            ni=len(issues),
+            issue_rows=issue_rows,
+            passed_html=passed_html,
+            rec_html=rec_html,
+            crawl_stats=crawl_stats_html,
+            **{"np": len(passed)}
         )
         return html
+
+    @staticmethod
+    def export_as_pdf(audit_data: dict, filepath: str) -> str:
+        """Convert the HTML audit report to PDF using weasyprint."""
+        try:
+            from weasyprint import HTML as WeasyprintHTML
+        except ImportError:
+            raise ImportError(
+                "weasyprint is required for PDF export. "
+                "Install it with: pip install weasyprint"
+            )
+
+        html_content = TechnicalAuditor._render_html_report(audit_data)
+        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+        WeasyprintHTML(string=html_content).write_pdf(filepath)
+        logger.info("PDF report exported to %s", filepath)
+        return filepath
+
 
     # ------------------------------------------------------------------
     # DB persistence

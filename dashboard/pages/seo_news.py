@@ -38,6 +38,24 @@ def render_seo_news_page():
     if "scrape_status" not in st.session_state:
         st.session_state.scrape_status = "idle"
 
+    # --- PDF Report Download ---
+    with st.expander("📄 Download PDF Report", expanded=False):
+        st.markdown("Generate a professional narrative PDF report of SEO news and strategies.")
+        if st.button("Generate PDF Report", type="primary", key="sn_pdf_btn"):
+            try:
+                from dashboard.export_helper import generate_seo_news_pdf
+                news_data = {
+                    "articles": st.session_state.get("scraped_articles", []),
+                    "strategies": st.session_state.get("sn_strategies", []),
+                }
+                pdf_path = generate_seo_news_pdf(news_data)
+                with open(pdf_path, "rb") as fh:
+                    st.download_button("⬇️ Download PDF", fh.read(),
+                        file_name=pdf_path.split("/")[-1], mime="application/pdf", key="sn_pdf_dl")
+                st.success("PDF report generated!")
+            except Exception as exc:
+                st.error("PDF generation failed: " + str(exc))
+
     # ---- Tabs ----
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🔍 Scrape News", "📊 Strategies", "✅ Verified", "🚀 Upgrades", "📜 History"
