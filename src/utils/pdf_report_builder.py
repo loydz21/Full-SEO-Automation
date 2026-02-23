@@ -84,328 +84,268 @@ def _escape_html(text):
 
 
 def _build_css(footer_text):
-    """Build the complete CSS stylesheet."""
+    """Build xhtml2pdf-compatible CSS stylesheet."""
     c = _COLORS
-    css_parts = []
-    css_parts.append('@page {{')
-    css_parts.append('  size: A4;')
-    css_parts.append('  margin: 1.8cm 1.5cm 2cm 1.5cm;')
-    css_parts.append('}}')
-    css_parts.append('* {{ margin: 0; padding: 0; box-sizing: border-box; }}')
-    css_parts.append('body {{')
-    css_parts.append('  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,')
-    css_parts.append('               "Helvetica Neue", Arial, sans-serif;')
-    css_parts.append('  font-size: 11pt;')
-    css_parts.append('  line-height: 1.65;')
-    css_parts.append('  color: {0};'.format(c['text']))
-    css_parts.append('  background: {0};'.format(c['white']))
-    css_parts.append('}}')
-    css_parts.append('.cover-page {{')
-    css_parts.append('  page-break-after: always;')
-    css_parts.append('  text-align: center;')
-    css_parts.append('  padding: 60px 40px;')
-    css_parts.append('  padding-top: 120px;')
-    css_parts.append('}}')
-    css_parts.append('.cover-header {{')
-    css_parts.append('  background: {0};'.format(c['navy']))
-    css_parts.append('  color: {0};'.format(c['white']))
-    css_parts.append('  padding: 60px 40px;')
-    css_parts.append('  border-radius: 8px;')
-    css_parts.append('  margin-bottom: 40px;')
-    css_parts.append('}}')
-    css_parts.append('.cover-title {{')
-    css_parts.append('  font-size: 32pt;')
-    css_parts.append('  font-weight: 700;')
-    css_parts.append('  margin-bottom: 12px;')
-    css_parts.append('  letter-spacing: -0.5px;')
-    css_parts.append('}}')
-    css_parts.append('.cover-subtitle {{')
-    css_parts.append('  font-size: 14pt;')
-    css_parts.append('  font-weight: 400;')
-    css_parts.append('  opacity: 0.85;')
-    css_parts.append('  margin-bottom: 8px;')
-    css_parts.append('}}')
-    css_parts.append('.cover-domain {{')
-    css_parts.append('  font-size: 16pt;')
-    css_parts.append('  color: {0};'.format(c['blue_light']))
-    css_parts.append('  margin-top: 16px;')
-    css_parts.append('}}')
-    css_parts.append('.cover-meta {{')
-    css_parts.append('  font-size: 11pt;')
-    css_parts.append('  color: {0};'.format(c['text_light']))
-    css_parts.append('  margin-top: 30px;')
-    css_parts.append('}}')
-    css_parts.append('.cover-summary {{')
-    css_parts.append('  font-size: 11pt;')
-    css_parts.append('  color: {0};'.format(c['text_light']))
-    css_parts.append('  margin-top: 24px;')
-    css_parts.append('  max-width: 600px;')
-    css_parts.append('  margin-left: auto;')
-    css_parts.append('  margin-right: auto;')
-    css_parts.append('  line-height: 1.7;')
-    css_parts.append('}}')
-    css_parts.append('.toc {{')
-    css_parts.append('  page-break-after: always;')
-    css_parts.append('  padding: 40px 0;')
-    css_parts.append('}}')
-    css_parts.append('.toc h2 {{')
-    css_parts.append('  font-size: 20pt;')
-    css_parts.append('  color: {0};'.format(c['navy']))
-    css_parts.append('  border-bottom: 3px solid {0};'.format(c['blue']))
-    css_parts.append('  padding-bottom: 10px;')
-    css_parts.append('  margin-bottom: 24px;')
-    css_parts.append('}}')
-    css_parts.append('.toc-item {{')
-    css_parts.append('  padding: 8px 0;')
-    css_parts.append('  border-bottom: 1px dotted {0};'.format(c['border']))
-    css_parts.append('  font-size: 11pt;')
-    css_parts.append('  color: {0};'.format(c['text']))
-    css_parts.append('}}')
-    css_parts.append('.toc-number {{')
-    css_parts.append('  display: inline-block;')
-    css_parts.append('  width: 30px;')
-    css_parts.append('  color: {0};'.format(c['blue']))
-    css_parts.append('  font-weight: 600;')
-    css_parts.append('}}')
-    css_parts.append('h1 {{')
-    css_parts.append('  font-size: 22pt;')
-    css_parts.append('  color: {0};'.format(c['navy']))
-    css_parts.append('  border-bottom: 3px solid {0};'.format(c['blue']))
-    css_parts.append('  padding-bottom: 10px;')
-    css_parts.append('  margin: 32px 0 16px 0;')
-    css_parts.append('  page-break-after: avoid;')
-    css_parts.append('}}')
-    css_parts.append('h2 {{')
-    css_parts.append('  font-size: 16pt;')
-    css_parts.append('  color: {0};'.format(c['navy']))
-    css_parts.append('  margin: 28px 0 12px 0;')
-    css_parts.append('  page-break-after: avoid;')
-    css_parts.append('}}')
-    css_parts.append('h3 {{')
-    css_parts.append('  font-size: 13pt;')
-    css_parts.append('  color: {0};'.format(c['text']))
-    css_parts.append('  margin: 20px 0 10px 0;')
-    css_parts.append('  page-break-after: avoid;')
-    css_parts.append('}}')
-    css_parts.append('p {{')
-    css_parts.append('  margin: 8px 0 12px 0;')
-    css_parts.append('  text-align: justify;')
-    css_parts.append('}}')
-    css_parts.append('.exec-summary {{')
-    css_parts.append('  background: {0};'.format(c['blue_bg']))
-    css_parts.append('  border-left: 4px solid {0};'.format(c['blue']))
-    css_parts.append('  padding: 20px 24px;')
-    css_parts.append('  margin: 20px 0;')
-    css_parts.append('  border-radius: 0 6px 6px 0;')
-    css_parts.append('}}')
-    css_parts.append('.exec-summary p {{')
-    css_parts.append('  margin: 6px 0;')
-    css_parts.append('  color: {0};'.format(c['text']))
-    css_parts.append('}}')
-    css_parts.append('.metrics-grid {{')
-    css_parts.append('  display: flex;')
-    css_parts.append('  flex-wrap: wrap;')
-    css_parts.append('  gap: 12px;')
-    css_parts.append('  margin: 16px 0 24px 0;')
-    css_parts.append('}}')
-    css_parts.append('.metric-card {{')
-    css_parts.append('  flex: 1 1 140px;')
-    css_parts.append('  background: {0};'.format(c['gray_light']))
-    css_parts.append('  border-radius: 8px;')
-    css_parts.append('  padding: 16px;')
-    css_parts.append('  text-align: center;')
-    css_parts.append('  border: 1px solid {0};'.format(c['border']))
-    css_parts.append('  page-break-inside: avoid;')
-    css_parts.append('}}')
-    css_parts.append('.metric-value {{')
-    css_parts.append('  font-size: 22pt;')
-    css_parts.append('  font-weight: 700;')
-    css_parts.append('  color: {0};'.format(c['blue']))
-    css_parts.append('}}')
-    css_parts.append('.metric-label {{')
-    css_parts.append('  font-size: 9pt;')
-    css_parts.append('  color: {0};'.format(c['text_light']))
-    css_parts.append('  margin-top: 4px;')
-    css_parts.append('  text-transform: uppercase;')
-    css_parts.append('  letter-spacing: 0.5px;')
-    css_parts.append('}}')
-    css_parts.append('.score-card {{')
-    css_parts.append('  text-align: center;')
-    css_parts.append('  padding: 24px;')
-    css_parts.append('  margin: 16px 0;')
-    css_parts.append('  border-radius: 10px;')
-    css_parts.append('  page-break-inside: avoid;')
-    css_parts.append('}}')
-    css_parts.append('.score-value {{')
-    css_parts.append('  font-size: 48pt;')
-    css_parts.append('  font-weight: 800;')
-    css_parts.append('  line-height: 1.1;')
-    css_parts.append('}}')
-    css_parts.append('.score-grade {{')
-    css_parts.append('  font-size: 20pt;')
-    css_parts.append('  font-weight: 700;')
-    css_parts.append('  margin-top: 4px;')
-    css_parts.append('}}')
-    css_parts.append('.score-label {{')
-    css_parts.append('  font-size: 10pt;')
-    css_parts.append('  text-transform: uppercase;')
-    css_parts.append('  letter-spacing: 1px;')
-    css_parts.append('  margin-top: 8px;')
-    css_parts.append('  color: {0};'.format(c['text_light']))
-    css_parts.append('}}')
-    css_parts.append('.category-scores {{')
-    css_parts.append('  margin: 16px 0 24px 0;')
-    css_parts.append('}}')
-    css_parts.append('.cat-score-row {{')
-    css_parts.append('  display: flex;')
-    css_parts.append('  align-items: center;')
-    css_parts.append('  margin: 8px 0;')
-    css_parts.append('  page-break-inside: avoid;')
-    css_parts.append('}}')
-    css_parts.append('.cat-score-label {{')
-    css_parts.append('  width: 160px;')
-    css_parts.append('  font-size: 10pt;')
-    css_parts.append('  font-weight: 600;')
-    css_parts.append('  color: {0};'.format(c['text']))
-    css_parts.append('}}')
-    css_parts.append('.cat-score-bar-bg {{')
-    css_parts.append('  flex: 1;')
-    css_parts.append('  height: 22px;')
-    css_parts.append('  background: {0};'.format(c['gray_light']))
-    css_parts.append('  border-radius: 11px;')
-    css_parts.append('  overflow: hidden;')
-    css_parts.append('  margin: 0 12px;')
-    css_parts.append('}}')
-    css_parts.append('.cat-score-bar {{')
-    css_parts.append('  height: 100%;')
-    css_parts.append('  border-radius: 11px;')
-    css_parts.append('}}')
-    css_parts.append('.cat-score-val {{')
-    css_parts.append('  width: 50px;')
-    css_parts.append('  text-align: right;')
-    css_parts.append('  font-weight: 700;')
-    css_parts.append('  font-size: 11pt;')
-    css_parts.append('}}')
-    css_parts.append('.findings-list {{')
-    css_parts.append('  margin: 16px 0;')
-    css_parts.append('}}')
-    css_parts.append('.finding-item {{')
-    css_parts.append('  border: 1px solid {0};'.format(c['border']))
-    css_parts.append('  border-radius: 8px;')
-    css_parts.append('  padding: 16px;')
-    css_parts.append('  margin: 10px 0;')
-    css_parts.append('  page-break-inside: avoid;')
-    css_parts.append('}}')
-    css_parts.append('.finding-header {{')
-    css_parts.append('  display: flex;')
-    css_parts.append('  align-items: center;')
-    css_parts.append('  gap: 10px;')
-    css_parts.append('  margin-bottom: 8px;')
-    css_parts.append('}}')
-    css_parts.append('.finding-severity {{')
-    css_parts.append('  display: inline-block;')
-    css_parts.append('  padding: 2px 10px;')
-    css_parts.append('  border-radius: 12px;')
-    css_parts.append('  font-size: 9pt;')
-    css_parts.append('  font-weight: 600;')
-    css_parts.append('  color: {0};'.format(c['white']))
-    css_parts.append('  text-transform: uppercase;')
-    css_parts.append('}}')
-    css_parts.append('.finding-title {{')
-    css_parts.append('  font-weight: 600;')
-    css_parts.append('  font-size: 11pt;')
-    css_parts.append('}}')
-    css_parts.append('.finding-desc {{')
-    css_parts.append('  font-size: 10pt;')
-    css_parts.append('  color: {0};'.format(c['text_light']))
-    css_parts.append('}}')
-    css_parts.append('.rec-list {{')
-    css_parts.append('  margin: 16px 0;')
-    css_parts.append('}}')
-    css_parts.append('.rec-item {{')
-    css_parts.append('  border-left: 4px solid {0};'.format(c['blue']))
-    css_parts.append('  padding: 14px 18px;')
-    css_parts.append('  margin: 12px 0;')
-    css_parts.append('  background: {0};'.format(c['gray_light']))
-    css_parts.append('  border-radius: 0 8px 8px 0;')
-    css_parts.append('  page-break-inside: avoid;')
-    css_parts.append('}}')
-    css_parts.append('.rec-priority {{')
-    css_parts.append('  display: inline-block;')
-    css_parts.append('  padding: 2px 8px;')
-    css_parts.append('  border-radius: 4px;')
-    css_parts.append('  font-size: 9pt;')
-    css_parts.append('  font-weight: 700;')
-    css_parts.append('  color: {0};'.format(c['white']))
-    css_parts.append('  margin-bottom: 6px;')
-    css_parts.append('}}')
-    css_parts.append('.rec-title {{')
-    css_parts.append('  font-weight: 600;')
-    css_parts.append('  font-size: 11pt;')
-    css_parts.append('  margin-bottom: 4px;')
-    css_parts.append('}}')
-    css_parts.append('.rec-desc {{')
-    css_parts.append('  font-size: 10pt;')
-    css_parts.append('  color: {0};'.format(c['text_light']))
-    css_parts.append('  margin-bottom: 6px;')
-    css_parts.append('}}')
-    css_parts.append('.rec-steps {{')
-    css_parts.append('  font-size: 10pt;')
-    css_parts.append('  padding-left: 18px;')
-    css_parts.append('}}')
-    css_parts.append('.rec-steps li {{')
-    css_parts.append('  margin: 3px 0;')
-    css_parts.append('  color: {0};'.format(c['text']))
-    css_parts.append('}}')
-    css_parts.append('table {{')
-    css_parts.append('  width: 100%;')
-    css_parts.append('  border-collapse: collapse;')
-    css_parts.append('  margin: 14px 0 20px 0;')
-    css_parts.append('  font-size: 10pt;')
-    css_parts.append('  page-break-inside: auto;')
-    css_parts.append('}}')
-    css_parts.append('table caption {{')
-    css_parts.append('  font-size: 10pt;')
-    css_parts.append('  font-weight: 600;')
-    css_parts.append('  color: {0};'.format(c['text_light']))
-    css_parts.append('  margin-bottom: 6px;')
-    css_parts.append('  text-align: left;')
-    css_parts.append('}}')
-    css_parts.append('th {{')
-    css_parts.append('  background: {0};'.format(c['navy']))
-    css_parts.append('  color: {0};'.format(c['white']))
-    css_parts.append('  padding: 10px 12px;')
-    css_parts.append('  text-align: left;')
-    css_parts.append('  font-weight: 600;')
-    css_parts.append('  font-size: 9pt;')
-    css_parts.append('  text-transform: uppercase;')
-    css_parts.append('  letter-spacing: 0.4px;')
-    css_parts.append('}}')
-    css_parts.append('td {{')
-    css_parts.append('  padding: 8px 12px;')
-    css_parts.append('  border-bottom: 1px solid {0};'.format(c['border']))
-    css_parts.append('}}')
-    css_parts.append('tr:nth-child(even) {{')
-    css_parts.append('  background: {0};'.format(c['gray_light']))
-    css_parts.append('}}')
-    css_parts.append('.chart-container {{')
-    css_parts.append('  text-align: center;')
-    css_parts.append('  margin: 18px 0;')
-    css_parts.append('  page-break-inside: avoid;')
-    css_parts.append('}}')
-    css_parts.append('.chart-container img {{')
-    css_parts.append('  max-width: 100%;')
-    css_parts.append('  height: auto;')
-    css_parts.append('}}')
-    css_parts.append('.page-break {{')
-    css_parts.append('  page-break-after: always;')
-    css_parts.append('}}')
-    return '\n'.join(css_parts)
+    # xhtml2pdf only supports basic CSS 2.1
+    # No flexbox, no border-radius, no advanced selectors
+    css = """
+@page {
+    size: A4;
+    margin: 2cm 1.5cm 2cm 1.5cm;
+}
+body {
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: """ + c['text'] + """;
+}
+.cover-page {
+    page-break-after: always;
+    text-align: center;
+    padding-top: 100px;
+}
+.cover-header {
+    background-color: """ + c['navy'] + """;
+    color: """ + c['white'] + """;
+    padding: 40px;
+    margin-bottom: 30px;
+}
+.cover-title {
+    font-size: 28pt;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: """ + c['white'] + """;
+}
+.cover-subtitle {
+    font-size: 14pt;
+    color: """ + c['white'] + """;
+    margin-bottom: 8px;
+}
+.cover-domain {
+    font-size: 16pt;
+    color: """ + c['blue_light'] + """;
+    margin-top: 16px;
+}
+.cover-meta {
+    font-size: 11pt;
+    color: """ + c['text_light'] + """;
+    margin-top: 20px;
+}
+.cover-summary {
+    font-size: 11pt;
+    color: """ + c['text_light'] + """;
+    margin-top: 20px;
+    text-align: left;
+    padding: 0 40px;
+}
+.toc {
+    page-break-after: always;
+    padding: 30px 0;
+}
+.toc h2 {
+    font-size: 20pt;
+    color: """ + c['navy'] + """;
+    border-bottom: 3px solid """ + c['blue'] + """;
+    padding-bottom: 8px;
+    margin-bottom: 20px;
+}
+.toc-item {
+    padding: 6px 0;
+    border-bottom: 1px dotted """ + c['border'] + """;
+    font-size: 11pt;
+}
+.toc-number {
+    color: """ + c['blue'] + """;
+    font-weight: bold;
+}
+h1 {
+    font-size: 20pt;
+    color: """ + c['navy'] + """;
+    border-bottom: 3px solid """ + c['blue'] + """;
+    padding-bottom: 8px;
+    margin-top: 20px;
+    margin-bottom: 12px;
+}
+h2 {
+    font-size: 15pt;
+    color: """ + c['navy'] + """;
+    margin-top: 18px;
+    margin-bottom: 10px;
+}
+h3 {
+    font-size: 13pt;
+    color: """ + c['text'] + """;
+    margin-top: 14px;
+    margin-bottom: 8px;
+}
+p {
+    margin-bottom: 10px;
+    text-align: justify;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+}
+th {
+    background-color: """ + c['navy'] + """;
+    color: """ + c['white'] + """;
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 10pt;
+    font-weight: bold;
+}
+td {
+    padding: 7px 10px;
+    border-bottom: 1px solid """ + c['border'] + """;
+    font-size: 10pt;
+}
+tr {
+    background-color: """ + c['white'] + """;
+}
+caption {
+    font-weight: bold;
+    font-size: 11pt;
+    margin-bottom: 6px;
+    text-align: left;
+    color: """ + c['navy'] + """;
+}
+.score-card {
+    text-align: center;
+    padding: 20px;
+    margin: 15px 0;
+    border: 2px solid """ + c['border'] + """;
+}
+.score-value {
+    font-size: 48pt;
+    font-weight: bold;
+}
+.score-grade {
+    font-size: 36pt;
+    font-weight: bold;
+}
+.score-label {
+    font-size: 12pt;
+    color: """ + c['text_light'] + """;
+    margin-top: 5px;
+}
+.severity-critical {
+    color: """ + c['red'] + """;
+    font-weight: bold;
+}
+.severity-warning {
+    color: """ + c['yellow'] + """;
+    font-weight: bold;
+}
+.severity-info {
+    color: """ + c['blue'] + """;
+    font-weight: bold;
+}
+.severity-good {
+    color: """ + c['green'] + """;
+    font-weight: bold;
+}
+.metric-row {
+    margin: 8px 0;
+    padding: 8px;
+    border-bottom: 1px solid """ + c['border'] + """;
+}
+.metric-label {
+    color: """ + c['text_light'] + """;
+    font-size: 10pt;
+}
+.metric-value {
+    font-size: 14pt;
+    font-weight: bold;
+}
+.issue-item {
+    padding: 8px;
+    margin: 6px 0;
+    border-left: 3px solid """ + c['border'] + """;
+}
+.priority-high {
+    color: """ + c['red'] + """;
+    font-weight: bold;
+}
+.priority-medium {
+    color: """ + c['yellow'] + """;
+    font-weight: bold;
+}
+.priority-low {
+    color: """ + c['blue'] + """;
+    font-weight: bold;
+}
+.rec-item {
+    padding: 8px;
+    margin: 6px 0;
+    border-left: 3px solid """ + c['green'] + """;
+}
+.section {
+    margin: 15px 0;
+}
+.chart-container {
+    text-align: center;
+    margin: 15px 0;
+}
+.chart-container img {
+    max-width: 100%;
+}
+.footer-text {
+    font-size: 9pt;
+    color: """ + c['gray'] + """;
+    text-align: center;
+    margin-top: 20px;
+}
+.bar-container {
+    background-color: """ + c['gray_light'] + """;
+    height: 18px;
+    margin: 4px 0;
+}
+.bar-fill {
+    height: 18px;
+    color: """ + c['white'] + """;
+    font-size: 9pt;
+    padding-left: 5px;
+    font-weight: bold;
+}
+.category-row {
+    margin: 6px 0;
+}
+.summary-box {
+    background-color: """ + c['blue_bg'] + """;
+    padding: 15px;
+    margin: 12px 0;
+    border-left: 4px solid """ + c['blue'] + """;
+}
+.warning-box {
+    background-color: """ + c['yellow_bg'] + """;
+    padding: 15px;
+    margin: 12px 0;
+    border-left: 4px solid """ + c['yellow'] + """;
+}
+.error-box {
+    background-color: """ + c['red_bg'] + """;
+    padding: 15px;
+    margin: 12px 0;
+    border-left: 4px solid """ + c['red'] + """;
+}
+.success-box {
+    background-color: """ + c['green_bg'] + """;
+    padding: 15px;
+    margin: 12px 0;
+    border-left: 4px solid """ + c['green'] + """;
+}
+ul {
+    margin-left: 20px;
+    margin-bottom: 10px;
+}
+li {
+    margin-bottom: 4px;
+}
+"""
+    return css
 
 
-# ---------------------------------------------------------------------------
-# PDFReportBuilder
-# ---------------------------------------------------------------------------
 class PDFReportBuilder:
     """Builder-pattern class for constructing professional PDF reports."""
 
